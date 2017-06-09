@@ -5,14 +5,7 @@
 #include <stdlib.h>
 #include <math.h>
 #include <string.h>
-
-
-struct list_element;
-struct list_head;
-void list_init(struct list_head *h);
-void list_add(struct list_head *h, int k, int v);
-void list_remove(struct list_head *h, int *k, int *v);
-void test_link_list();
+#include "link_list.h"
 
 struct element {
 	int key;
@@ -33,7 +26,6 @@ long get_ele_count(char *name) {
 	fclose(fp);
 	return (sz / sizeof(struct element));
 }
-
 
 /*
  * read elements in file
@@ -114,12 +106,13 @@ void fill_rho(int array[], int n, int size_of_bucket) {
 }
 
 void melbourn_shuffle(char *input, char *temp, int rho[], char *output, int p) {
-	FILE		*ifp, *ofp, *tfp;
-	int		input_size, i, j, num, element_per_bucket, k;
-	long		buckets;
-	struct element	*bucketM, *rev_bucket, *t, *clean_rev_bucket;
-	int		max_elems, idT;
-	int		write_location;
+	FILE			*ifp, *ofp, *tfp;
+	int			input_size, i, j, num, element_per_bucket, k;
+	long			buckets;
+	struct element		*bucketM, *t, *clean_rev_bucket, ele;
+	struct list_head*	rev_bucket;
+	int			max_elems, idT;
+	int			write_location, list_k, list_v;
 
 	input_size =  get_ele_count(input);
 
@@ -133,46 +126,60 @@ void melbourn_shuffle(char *input, char *temp, int rho[], char *output, int p) {
 	max_elems = p * log(input_size);
 
 	bucketM = (struct element *) malloc (element_per_bucket * sizeof(struct element));
-	rev_bucket = (struct element *) malloc (max_elems * sizeof(struct element) * sqrt(input_size)); // allocate sqrt(input_size) rev_bucket containing max_elems
+	rev_bucket = (struct list_head *) malloc (sizeof(struct list_head) * sqrt(input_size)); // allocate sqrt(input_size) link list heads to hold rev_buckets
 
 	/*
 	 * Distribution phase
 	 */
 
 	for(i = 0; i < buckets; i++) {								// setp 4
-//		printf("\nWORKING on bucket : %d\n", i);
-		memset(rev_bucket, 0, max_elems * sizeof(struct element) * sqrt(input_size));
+		printf("\nStep : %d\n", i);
+		for(k = 0; k < sqrt(input_size); k++) {
+			list_init(&rev_bucket[k]);
+		}
 
 		fseek (ifp , i * sizeof(struct element) * element_per_bucket , SEEK_SET);	// step 5
 		fread(bucketM, sizeof(struct element), element_per_bucket, ifp);		// step 5
 
 		for(j = 0; j < element_per_bucket; j++) {					// step 7
-//			printf("\nIN LOOP %d %d", bucketM[j].key, bucketM[j].value);
-			idT = rho[bucketM[j].key] % (int) sqrt(input_size);			// step 9
-//			printf("idT : %d", idT);
-			t = rev_bucket + (idT * max_elems);
-			t->key = bucketM[j].key;
-			t->value = bucketM[j].value;						// step 10
+			idT = rho[bucketM[j].key] / (int) sqrt(input_size);			// step 9
+			list_add(&rev_bucket[idT], bucketM[j].key, bucketM[j].value);		// step 10
 		}
-//		for(k = 0 ; k < max_elems * sqrt(input_size); k++) {
-//			if(k % max_elems == 0)
-//				printf("\n");
-//			printf("\nRev_bucket %d %d", rev_bucket[k].key, rev_bucket[k].value);
-//		}
 		for(k = 0; k < buckets; k++) {
-			// fill dummy data if required, but its already a garbage value, so skipping this
-			t = rev_bucket + (k * max_elems); 								// select each rev_bucket base address
+			if(rev_bucket[k].size > max_elems) {					// step 14
+				printf("\nERROR");						// step 15
+				break;
+			}
+			while(rev_bucket[k].size < max_elems) {
+				list_add(&rev_bucket[k], -1, -1);				// step 18
+			}
+
+			/* 
+			 * write rev_bucket to temp file
+			 */
+
 			write_location = k * sizeof(struct element) * max_elems * (int) sqrt(input_size) + i * max_elems * sizeof(struct element);
-//			printf("\nwrite location %d\n", write_location);
 			fseek (tfp , write_location, SEEK_SET);								// seek to approprite location ( i.e. within each bucket at ith position )
-			fwrite(t, sizeof(struct element), max_elems, tfp);						// write rev_bucket
+
+			printf("Printing rev buckets \n");
+			list_print(&rev_bucket[k]);		//debug
+			while(rev_bucket[k].size != 0 ) {
+				list_remove(&rev_bucket[k], &list_k, &list_v);
+				ele.key = list_k;
+				ele.value = list_v;
+				fwrite(&ele, sizeof(struct element), 1, tfp);						// write rev_bucket
+			}
 		}
-//		printf("\nprinting TMP\n");
-//		print_file("tmp");
 	}
+
 	free(rev_bucket);
 	fclose(ifp);
 	fclose(tfp);
+
+	printf("\n Printing TEMP file\n");
+	print_file("tmp");
+
+
 
 	/*
 	 * Clean up phase
@@ -184,20 +191,20 @@ void melbourn_shuffle(char *input, char *temp, int rho[], char *output, int p) {
 	clean_rev_bucket = (struct element *) malloc (max_elems * sizeof(struct element) * (int) sqrt(input_size));
 	for(i = 0; i < buckets; i++) {
 		fread(clean_rev_bucket, sizeof(struct element), max_elems * (int) sqrt(input_size), tfp);
-		for(j = 0; j < (int) sqrt(input_size); j++) {
-			t = clean_rev_bucket + (j * max_elems);
-			printf("Final -> %d %d\n", t->key, t-> value);
-			idT = rho[t->key] % (int) sqrt(input_size);
-			bucketM[idT].key = t->key;
-			bucketM[idT].value = t->value;
+		for(j = 0; j <  max_elems * (int) sqrt(input_size); j++) {
+			printf("%d %d -> %d %d\n",i,j, clean_rev_bucket[j].key , clean_rev_bucket[j].value);
+			if(clean_rev_bucket[j].key == -1) {
+				continue;
+			}
+			idT = rho[clean_rev_bucket[j].key] % (int) sqrt(input_size);
+			bucketM[idT].key = clean_rev_bucket[j].key;
+			bucketM[idT].value = clean_rev_bucket[j].value;
 		}
 		fwrite(bucketM, sizeof(struct element), element_per_bucket, ofp);
 		printf("\n");
 	}
 
-
 	free(bucketM);
-
 	fclose(ofp);
 	fclose(tfp);
 
@@ -222,121 +229,3 @@ int main(int argc, char **argv) {
 	melbourn_shuffle(input, "tmp", rho, output, 2);
 	free(rho);
 }
-
-/*
- * This is link list implimentation : YOU CAN IGNORE THIS : FOR TESTING USE TESTING STUB test_link_list
- */
-
-struct list_element {
-	int		key;
-	int		value;
-	struct list_element *next;
-};
-
-struct list_head {
-	int	size;
-	struct list_element *next;
-};
-
-
-/*
- *  simply inisialize link list
- */
-
-void list_init(struct list_head *h) {
-	h->size = 0;
-	h->next = NULL;
-}
-
-/*
- * add element in link list
- * Causion : this funtion assumes link list is initialized before using it.
- */
-
-void list_add(struct list_head *h, int k, int v) {
-	struct list_element *temp;
-	temp = (struct list_element *) malloc (sizeof(struct list_element));
-
-	// copy value to temp varialbe
-	temp->key = k;
-	temp->value = v;
-
-	// attach temp variable to start of list
-	temp->next = h->next;
-	h->next = temp;
-
-
-	// increment count
-	h->size = h->size + 1;
-}
-
-/*
- * remove elemet from head of the list  and return its value in k and v
- */
-
-void list_remove(struct list_head *h, int *k, int *v) {
-	struct list_element *temp;
-	if(h->size != 0) {
-
-		// decrement count
-		h->size = h->size - 1;
-
-		// copy value
-		*k = h->next->key;
-		*v = h->next->value;
-		
-		// go to next value
-		temp = h->next;
-		h->next = h->next->next;
-		free(temp);
-	} else {
-		printf("\nINVALIDE OPERATION : UNDERFLOW");	
-	}
-}
-
-/*
- * funtion to test link list, just add/remove few values
- */
-
-void test_link_list() {
-	struct list_head	h;
-	int			key, value;
-
-	list_init(&h);
-
-
-	list_remove(&h, &key, &value);  // expect underflow
-
-	list_add(&h, 10, 10);
-	list_add(&h, 20, 20);
-	list_add(&h, 30, 30);
-
-	list_remove(&h, &key, &value);
-	printf("\nkey : %d, value : %d", key, value);
-
-	list_remove(&h, &key, &value);
-	printf("\nkey : %d, value : %d", key, value);
-
-	list_remove(&h, &key, &value);
-	printf("\nkey : %d, value : %d", key, value);
-
-
-	list_remove(&h, &key, &value);  // expect underflow
-
-	list_add(&h, 10, 10);
-	list_add(&h, 20, 20);
-	list_add(&h, 30, 30);
-
-	list_remove(&h, &key, &value);
-	printf("\nkey : %d, value : %d", key, value);
-
-	list_remove(&h, &key, &value);
-	printf("\nkey : %d, value : %d", key, value);
-
-	list_remove(&h, &key, &value);
-	printf("\nkey : %d, value : %d\n", key, value);
-}
-
-/* link list end */
-
-
