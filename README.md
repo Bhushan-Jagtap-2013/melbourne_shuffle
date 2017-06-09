@@ -12,3 +12,6 @@ To run:
 To clean:
 
 #> make clean
+
+
+[Link to paper](https://arxiv.org/abs/1402.5524)
