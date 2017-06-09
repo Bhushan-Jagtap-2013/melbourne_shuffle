@@ -63,7 +63,7 @@ void print_file(char *name) {
 	fp = fopen(name, "rb");
 	if (fp) {
 		while(fread(&e, sizeof(struct element), 1, fp)) {
-			printf("%d %d\n", e.key, e.value);
+			printf("%d %d\t", e.key, e.value);
 		}
 	} else {
 		printf("ERROR printing file");
@@ -96,14 +96,27 @@ void fill_rho(int array[], int n, int size_of_bucket) {
 	for(i = 0; i < n; i = i + size_of_bucket) {
 		shuffle(&array[i], size_of_bucket);
 	}
-	printf("\nrho :");
+	printf("\nrho :\n");
 	for(i = 0; i < n; i++) {
 		if( i % size_of_bucket == 0)
 			printf("  ");
-		printf("%d ", array[i]);
+		printf("%d\t", array[i]);
 	}
 	printf("\n");
 }
+
+/*
+ * Funtion 	: melbourn_shuffle
+ * Description 	: obliviously shuffles elements
+ * Input 	:
+ * 	input 	: name of input file
+ * 	temp 	: name of temporary file to store value obliviously
+ * 	rho	: permutation array
+ * 	output	: name of output file
+ * 	p	: constant value
+ * Output :
+ * 	it will shuffle contens according to rho and store it in output file.
+ */
 
 void melbourn_shuffle(char *input, char *temp, int rho[], char *output, int p) {
 	FILE			*ifp, *ofp, *tfp;
@@ -125,49 +138,57 @@ void melbourn_shuffle(char *input, char *temp, int rho[], char *output, int p) {
 	element_per_bucket = sqrt(input_size);			// step 2
 	max_elems = p * log(input_size);
 
-	bucketM = (struct element *) malloc (element_per_bucket * sizeof(struct element));
-	rev_bucket = (struct list_head *) malloc (sizeof(struct list_head) * sqrt(input_size)); // allocate sqrt(input_size) link list heads to hold rev_buckets
+	bucketM = (struct element *) malloc (element_per_bucket * sizeof(struct element));	// allocate bucket to hold input from file
+	rev_bucket = (struct list_head *) malloc (sizeof(struct list_head) * sqrt(input_size)); // allocate sqrt(input_size) number of link list heads to hold rev_buckets
 
 	/*
 	 * Distribution phase
 	 */
 
-	for(i = 0; i < buckets; i++) {								// setp 4
-		printf("\nStep : %d\n", i);
-		for(k = 0; k < sqrt(input_size); k++) {
+	for(i = 0; i < buckets; i++) {									// setp 4
+		for(k = 0; k < sqrt(input_size); k++) {							// Initializing link list
 			list_init(&rev_bucket[k]);
 		}
+		fseek (ifp , i * sizeof(struct element) * element_per_bucket , SEEK_SET);		// step 5
+		fread(bucketM, sizeof(struct element), element_per_bucket, ifp);			// step 5
 
-		fseek (ifp , i * sizeof(struct element) * element_per_bucket , SEEK_SET);	// step 5
-		fread(bucketM, sizeof(struct element), element_per_bucket, ifp);		// step 5
-
-		for(j = 0; j < element_per_bucket; j++) {					// step 7
-			idT = rho[bucketM[j].key] / (int) sqrt(input_size);			// step 9
-			list_add(&rev_bucket[idT], bucketM[j].key, bucketM[j].value);		// step 10
+		for(j = 0; j < element_per_bucket; j++) {						// step 7
+			idT = rho[bucketM[j].key] / (int) sqrt(input_size);				// step 9
+			list_add(&rev_bucket[idT], bucketM[j].key, bucketM[j].value);			// step 10
 		}
 		for(k = 0; k < buckets; k++) {
-			if(rev_bucket[k].size > max_elems) {					// step 14
-				printf("\nERROR");						// step 15
+			if(rev_bucket[k].size > max_elems) {									// step 14
+				printf("\nERROR : rho moves more than plog(n) elements from a bucket of I to a bucket of T");	// step 15
 				break;
 			}
 			while(rev_bucket[k].size < max_elems) {
-				list_add(&rev_bucket[k], -1, -1);				// step 18
+				list_add(&rev_bucket[k], -1, -1);					// step 18
 			}
 
-			/* 
-			 * write rev_bucket to temp file
+			/*
+			 *  seek to approprite location ( i.e. within each bucket at ith position )
 			 */
 
-			write_location = k * sizeof(struct element) * max_elems * (int) sqrt(input_size) + i * max_elems * sizeof(struct element);
-			fseek (tfp , write_location, SEEK_SET);								// seek to approprite location ( i.e. within each bucket at ith position )
+			write_location = k * sizeof(struct element) * max_elems * (int) sqrt(input_size) + i * max_elems * sizeof(struct element);	// step 20
+			fseek (tfp , write_location, SEEK_SET);												// step 20
 
-			printf("Printing rev buckets \n");
-			list_print(&rev_bucket[k]);		//debug
-			while(rev_bucket[k].size != 0 ) {
+			/*
+			 * DEBUG:
+			 * You can print rev_buckets using list_print()
+			 * printf("Printing rev buckets \n");
+			 * list_print(&rev_bucket[k]);
+			 */
+
+			while(rev_bucket[k].size != 0 ) {												// step 20
 				list_remove(&rev_bucket[k], &list_k, &list_v);
 				ele.key = list_k;
 				ele.value = list_v;
-				fwrite(&ele, sizeof(struct element), 1, tfp);						// write rev_bucket
+
+				/*
+				 * Here we assume write adjust file pointer to next location
+				 */
+
+				fwrite(&ele, sizeof(struct element), 1, tfp);										// step 20
 			}
 		}
 	}
@@ -176,10 +197,12 @@ void melbourn_shuffle(char *input, char *temp, int rho[], char *output, int p) {
 	fclose(ifp);
 	fclose(tfp);
 
-	printf("\n Printing TEMP file\n");
-	print_file("tmp");
-
-
+	/* 
+	 * DEBUG:
+	 * You can ise print_file() to print files contents
+	 * printf("\n Printing TEMP file\n");
+	 * print_file("tmp");
+	 */
 
 	/*
 	 * Clean up phase
@@ -189,28 +212,32 @@ void melbourn_shuffle(char *input, char *temp, int rho[], char *output, int p) {
 	ofp = fopen(output, "wb");
 
 	clean_rev_bucket = (struct element *) malloc (max_elems * sizeof(struct element) * (int) sqrt(input_size));
-	for(i = 0; i < buckets; i++) {
-		fread(clean_rev_bucket, sizeof(struct element), max_elems * (int) sqrt(input_size), tfp);
+	for(i = 0; i < buckets; i++) {											// step 24
+		fread(clean_rev_bucket, sizeof(struct element), max_elems * (int) sqrt(input_size), tfp);		// step 25
 		for(j = 0; j <  max_elems * (int) sqrt(input_size); j++) {
-			printf("%d %d -> %d %d\n",i,j, clean_rev_bucket[j].key , clean_rev_bucket[j].value);
+
+			/*
+			 * Skip dummy element identified by -1
+			 */
+
 			if(clean_rev_bucket[j].key == -1) {
-				continue;
+				continue;										// step 27								
 			}
-			idT = rho[clean_rev_bucket[j].key] % (int) sqrt(input_size);
+
+			/*
+			 * sort element within bucket according to rho
+			 */
+
+			idT = rho[clean_rev_bucket[j].key] % (int) sqrt(input_size);					// step 28
 			bucketM[idT].key = clean_rev_bucket[j].key;
 			bucketM[idT].value = clean_rev_bucket[j].value;
 		}
-		fwrite(bucketM, sizeof(struct element), element_per_bucket, ofp);
-		printf("\n");
+		fwrite(bucketM, sizeof(struct element), element_per_bucket, ofp);					// step 29
 	}
 
 	free(bucketM);
 	fclose(ofp);
 	fclose(tfp);
-
-	printf("\n Printing OUTPUT\n");
-	print_file("output");
-
 }
 
 int main(int argc, char **argv) {
@@ -228,4 +255,9 @@ int main(int argc, char **argv) {
 
 	melbourn_shuffle(input, "tmp", rho, output, 2);
 	free(rho);
+
+	printf("\nOutput File\n");
+	print_file(output);
+
+
 }

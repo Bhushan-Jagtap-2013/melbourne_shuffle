@@ -1,3 +1,7 @@
+/*
+ * author : Bhushan Jagtap
+ */
+
 #include <stdio.h>
 #include <unistd.h>
 #include <sys/stat.h>
@@ -8,7 +12,7 @@
 
 
 /*
- * This is link list implimentation : YOU CAN IGNORE THIS : FOR TESTING USE TESTING STUB test_link_list
+ * This is link list implimentation : FOR TESTING USE TESTING STUB test_link_list
  */
 
 struct list_element {
@@ -24,7 +28,7 @@ struct list_head {
 
 
 /*
- *  simply inisialize link list
+ *  simply initialize link list
  */
 
 void list_init(struct list_head *h) {
@@ -59,7 +63,7 @@ void list_add(struct list_head *h, int k, int v) {
  */
 
 void list_remove(struct list_head *h, int *k, int *v) {
-	struct list_element *temp;
+	struct list_element	*temp;
 	if(h->size != 0) {
 
 		// decrement count
@@ -122,7 +126,7 @@ void test_link_list() {
 }
 
 void list_print(struct list_head *h) {
-	struct list_element *t;
+	struct list_element	*t;
 	printf("Size of list : %d\n", h->size);
 	t = h->next;
 	while(t != NULL) {
@@ -130,7 +134,3 @@ void list_print(struct list_head *h) {
 		t = t->next;
 	}
 }
-
-/* link list end */
-
-
